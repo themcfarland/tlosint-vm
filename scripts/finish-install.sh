@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Most of these functions were taken from kali-finish-install in the git repo
+# Most of these functions were originally taken from kali-finish-install in the git repo
 # live-build-config, with some minor modifications. It should be kept in sync,
 # so please keep the diff minimal (no indent changes, no reword, no nitpick
 # of any sort).
@@ -10,24 +10,34 @@
 set -e
 
 configure_apt_sources_list() {
-    # make sources.list empty, to force setting defaults
-    echo > /etc/apt/sources.list
+    # The deb822 format (Types:/URIs:/Suites:) only works in
+    # /etc/apt/sources.list.d/*.sources, not /etc/apt/sources.list.
+    sources=/etc/apt/sources.list.d/debian.sources
 
-    if grep -q '^deb ' /etc/apt/sources.list; then
-        echo "INFO: sources.list is configured, everything is fine"
+    : > /etc/apt/sources.list
+
+    if [ -s "$sources" ]; then
+        echo "INFO: $sources is configured, everything is fine"
         return
     fi
 
-    echo "INFO: sources.list is empty, setting up a default one for Kali"
+    echo "INFO: writing default Debian sources to $sources"
 
-    cat >/etc/apt/sources.list <<END
-# See https://www.kali.org/docs/general-use/kali-linux-sources-list-repositories/
-deb http://http.kali.org/kali kali-rolling main contrib non-free
+    cat >"$sources" <<END
+Types: deb deb-src
+URIs: http://deb.debian.org/debian
+Suites: trixie trixie-updates trixie-backports
+Components: main contrib non-free non-free-firmware
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
 
-# Additional line for source packages
-# deb-src http://http.kali.org/kali kali-rolling main contrib non-free
+Types: deb deb-src
+URIs: http://security.debian.org/debian-security
+Suites: trixie-security
+Components: main contrib non-free non-free-firmware
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
 END
     apt-get update
+    unset sources
 }
 
 get_user_list() {
@@ -67,11 +77,11 @@ configure_usergroups() {
     # sudo - be root
     # vboxsf - shared folders for virtualbox guest
     # wireshark - capture sessions in wireshark
-    kali_groups="adm dialout kaboxer sudo vboxsf wireshark"
+    deb_groups="adm dialout kaboxer sudo vboxsf wireshark"
 
     for user in $(get_user_list | grep -xv root); do
-        echo "INFO: adding user '$user' to groups '$kali_groups'"
-	for grp in $kali_groups; do
+        echo "INFO: adding user '$user' to groups '$deb_groups'"
+	for grp in $deb_groups; do
 	    getent group "$grp" >/dev/null || continue
 	    usermod -a -G "$grp" "$user"
 	done
